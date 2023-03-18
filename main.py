@@ -17,7 +17,6 @@ def rank_sel(costs, n_parents):
         probs[i] = (1 - sum(probs[:i])) * p
     probs[-1] = 1 - sum(probs)
 
-
     parents_idx = np.random.choice(np.arange(len(costs)), size=n_parents, replace=False, p=probs)
     return parents_idx
 
@@ -53,13 +52,44 @@ def mutation(perms, prob):
     return mutated
 
 
+def crossing(perms, parents_idx):
+    """
+    Function implementing crossing of genes between individuals
+
+    :param parents_idx: indexes of parents, every 2 following indexes make parents
+    :param perms: array with shape (n_cities, n_populations) of permutations, each column index is another individual,
+        later becoming a child
+    :return: children, got by crossing genes of parents
+    """
+    parents = perms[:, parents_idx]
+    n_cities, n_populations = perms.shape
+
+    length_of_cross = int(n_cities / 3)  # a piece of approximately 30% of length of permutation will be changed
+    n_parents = int(n_populations / 2)  # number of pairs of parents f.e. 6 pairs = 12 parents = 12 children
+
+    for pair_id in range(n_parents):
+        start = np.random.randint(0, n_cities - length_of_cross)  # można wyciągnąć przed pętle i zoptymalizowac
+        stop = start + length_of_cross  # można wyciągnąć przed pętle i zoptymalizowac
+
+        p1 = parents[:, pair_id * 2]
+        p2 = parents[:, pair_id * 2 + 1]
+        cities_1 = p1[start:stop]
+        cities_2 = p2[start:stop]
+
+        for el in range(len(p1)): # tu dalej
+            print(el)
+
+    return parents
+
+
 def euclidean_sum(x, y, perms):
     """
     Cost function using Euclidean norm. Sums all the distances between each of the cities.
 
     :param x: x coordinates of cities
     :param y: y coordinates of cities
-    :param perms: array with shape (n_cities, n_populations) with permutations of cities for each individual in population
+    :param perms: array with shape (n_cities, n_populations) with permutations of cities for each
+    individual in population
     :return: sum of distances for each individual and result of best individual
     """
     perms_shifted = np.roll(perms, -1, axis=0)
@@ -79,6 +109,7 @@ def salesman_gen(num_cities, n_population, n_generations, mutation_prob):
     """
     Function solving Traveling Salesman problem using genetic algorithm
 
+    :param mutation_prob:
     :param num_cities:
     :param n_population:
     :param n_generations:
@@ -96,10 +127,10 @@ def salesman_gen(num_cities, n_population, n_generations, mutation_prob):
         costs, best = euclidean_sum(x, y, perms)
         parents_idx = roulette_sel(costs, n_population)  # rank_sel(costs, n_parents)
 
-        parents = perms[:, parents_idx]
-        parents_mutated = mutation(parents, mutation_prob)
-        perms = parents_mutated
+        children = crossing(perms, parents_idx)
+        children_mutated = mutation(children, mutation_prob)
+        perms = children_mutated
 
 
 if __name__ == '__main__':
-    salesman_gen(10, 12, 5, 0.1)
+    salesman_gen(10, 12, 1, 0.1)
