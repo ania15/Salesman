@@ -67,19 +67,30 @@ def crossing(perms, parents_idx):
     length_of_cross = int(n_cities / 3)  # a piece of approximately 30% of length of permutation will be changed
     n_parents = int(n_populations / 2)  # number of pairs of parents f.e. 6 pairs = 12 parents = 12 children
 
+    children = np.zeros((n_cities, n_populations))
+
     for pair_id in range(n_parents):
-        start = np.random.randint(0, n_cities - length_of_cross)  # można wyciągnąć przed pętle i zoptymalizowac
-        stop = start + length_of_cross  # można wyciągnąć przed pętle i zoptymalizowac
+        start = np.random.randint(0, n_cities - length_of_cross)  # drawing random place where crossing will change
+        stop = start + length_of_cross
 
-        p1 = parents[:, pair_id * 2]
-        p2 = parents[:, pair_id * 2 + 1]
-        cities_1 = p1[start:stop]
-        cities_2 = p2[start:stop]
+        p1 = parents[:, pair_id * 2]  # selecting parent 1
+        p2 = parents[:, pair_id * 2 + 1]  # selecting parent 2
+        cities_1 = p1[start:stop]  # part which will be changed
+        cities_2 = p2[start:stop]  # part which will be changed
 
-        for el in range(len(p1)): # tu dalej
-            print(el)
+        index_1 = np.ravel([np.where(p1 == i) for i in cities_2])  # getting indexes of cities we want to change
+        index_2 = np.ravel([np.where(p2 == i) for i in cities_1])
 
-    return parents
+        p1_new = np.delete(p1, index_1)  # deleting those cities
+        p2_new = np.delete(p2, index_2)
+
+        p1_final = np.insert(p1_new, start, cities_2)  # inserting new cities
+        p2_final = np.insert(p2_new, start, cities_1)
+
+        children[:, pair_id * 2] = p1_final  # putting it to final array
+        children[:, pair_id * 2 + 1] = p2_final
+
+    return children
 
 
 def euclidean_sum(x, y, perms):
@@ -125,6 +136,7 @@ def salesman_gen(num_cities, n_population, n_generations, mutation_prob):
 
     for i in range(n_generations):
         costs, best = euclidean_sum(x, y, perms)
+        print(best)
         parents_idx = roulette_sel(costs, n_population)  # rank_sel(costs, n_parents)
 
         children = crossing(perms, parents_idx)
@@ -133,4 +145,4 @@ def salesman_gen(num_cities, n_population, n_generations, mutation_prob):
 
 
 if __name__ == '__main__':
-    salesman_gen(10, 12, 1, 0.1)
+    salesman_gen(10, 100, 100, 0.1)
