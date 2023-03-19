@@ -116,33 +116,57 @@ def euclidean_sum(x, y, perms):
     return np.sum(dist, axis=1), np.min(np.sum(dist, axis=1))
 
 
-def salesman_gen(num_cities, n_population, n_generations, mutation_prob):
+def salesman_gen(num_cities, n_population, n_generations, mutation_prob, selection_method='roulette'): # czy dodajemy jeszcze argument do prawd. krzyzowania? jaki?
     """
     Function solving Traveling Salesman problem using genetic algorithm
 
+    :param selection_method: Can be 'roulette' or 'rank'
     :param mutation_prob:
     :param num_cities:
     :param n_population:
     :param n_generations:
     :return:
     """
+    # drawing x and y coordinates of cities
     x = 300 * np.random.random(num_cities)
     y = 300 * np.random.random(num_cities)
 
+    # generating initial population
     perms = np.zeros((num_cities, n_population))
 
     for i in range(n_population):
         perms[1:, i] = np.random.permutation(num_cities - 1) + 1
 
+    if selection_method == 'roulette':
+        selection = roulette_sel
+    elif selection_method == 'rank':
+        selection = roulette_sel
+    else:
+        print('This selection method is not supported')
+        return
+
+    # grading initial population
+    costs, total_best_cost = euclidean_sum(x, y, perms)
+    best_solution = perms[:, np.argmin(costs)]
+
+    # main algorithm
     for i in range(n_generations):
         costs, best = euclidean_sum(x, y, perms)
-        print(best)
-        parents_idx = roulette_sel(costs, n_population)  # rank_sel(costs, n_parents)
 
+        if best < total_best_cost:
+            total_best_cost = best
+            best_solution = perms[:, np.argmin(costs)]
+
+        parents_idx = selection(costs, n_population)
         children = crossing(perms, parents_idx)
         children_mutated = mutation(children, mutation_prob)
         perms = children_mutated
 
+        print("Najlepsze total:", total_best_cost, "najlepsze w tej populacji:", best)
+
+    print("Najlepsze rozwiązanie:", best_solution, "o koszcie:", total_best_cost)
+
 
 if __name__ == '__main__':
-    salesman_gen(10, 100, 100, 0.1)
+    np.random.seed(42)
+    salesman_gen(num_cities=10, n_population=1000, n_generations=1000, mutation_prob=0.5, selection_method='rank')
