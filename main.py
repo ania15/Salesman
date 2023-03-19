@@ -1,5 +1,5 @@
 import numpy as np
-
+import matplotlib.pyplot as plt
 
 def rank_sel(costs, n_parents):
     """
@@ -125,6 +125,7 @@ def salesman_gen(num_cities, n_population, n_generations, mutation_prob, selecti
     :param num_cities:
     :param n_population:
     :param n_generations:
+    :param mutation_prob:
     :return:
     """
     # drawing x and y coordinates of cities
@@ -148,7 +149,7 @@ def salesman_gen(num_cities, n_population, n_generations, mutation_prob, selecti
     # grading initial population
     costs, total_best_cost = euclidean_sum(x, y, perms)
     best_solution = perms[:, np.argmin(costs)]
-
+    best_list=[]
     # main algorithm
     for i in range(n_generations):
         costs, best = euclidean_sum(x, y, perms)
@@ -157,16 +158,47 @@ def salesman_gen(num_cities, n_population, n_generations, mutation_prob, selecti
             total_best_cost = best
             best_solution = perms[:, np.argmin(costs)]
 
+        best_list.append(total_best_cost)
         parents_idx = selection(costs, n_population)
         children = crossing(perms, parents_idx)
         children_mutated = mutation(children, mutation_prob)
         perms = children_mutated
 
-        print("Najlepsze total:", total_best_cost, "najlepsze w tej populacji:", best)
-
+        #print("Najlepsze total:", total_best_cost, "najlepsze w tej populacji:", best)
+    best_solution = best_solution.astype(int)
     print("Najlepsze rozwiązanie:", best_solution, "o koszcie:", total_best_cost)
+    x_coords = np.array([x[i] for i in best_solution])
+    y_coords = np.array([y[i] for i in best_solution])
 
+    return best_solution, total_best_cost, x_coords, y_coords, best_list
+
+def visualize(best_solution, best_cost, x, y, best):
+
+    fig, ax = plt.subplots(1,2, figsize=[20, 15])
+    fig.suptitle("Problem Komiwojażera")
+
+    ax[0].set(title="Optymalna ścieżka", xlabel="X", ylabel="Y")
+    ax[0].scatter(x, y, color='b')
+    for i in range(len(best_solution) - 1):
+        start = best_solution[i]
+        end = best_solution[i + 1]
+        x_vals = [x[start], x[end]]
+        y_vals = [y[start], y[end]]
+        ax[0].plot(x_vals, y_vals, color='r')
+        ax[0].text(x[start], y[start], str(start), fontsize=12)
+    #pierwsze z ostatnim
+    x_vals = [x[best_solution[-1]], x[best_solution[0]]]
+    y_vals = [y[best_solution[-1]], y[best_solution[0]]]
+    ax[0].plot(x_vals, y_vals, color='r')
+    ax[0].text(x[best_solution[-1]], y[best_solution[-1]], str(best_solution[-1]))
+
+    ax[1].set(title="Funkcja kosztu w kolejnych pokoleniach", xlabel="Numer pokolenia", ylabel="Wartość funkcji kosztu")
+    ax[1].plot(best)
+
+    plt.show()
 
 if __name__ == '__main__':
-    np.random.seed(42)
-    salesman_gen(num_cities=10, n_population=1000, n_generations=1000, mutation_prob=0.5, selection_method='rank')
+    #np.random.seed(42)
+    best_sol, best_cost, x, y, best = salesman_gen(num_cities=10, n_population=1000, n_generations=100, mutation_prob=0.5, selection_method='roulette')
+    print(best)
+    visualize(best_sol, best_cost, x, y, best)
