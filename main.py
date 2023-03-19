@@ -1,6 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+def selection_delete_and_duplicate( costs,perms, n_parents):
+    """
+    Selects parents from population by deleting the worst individuals and duplicating the best ones.
+    """
+    idx = np.argsort(costs)
+    parents = perms[idx[:n_parents]]
+    good_parents = np.repeat(parents[:, n_parents//2:], 2, axis=1)
+
+    return good_parents
+
 def rank_sel(costs, n_parents):
     """
     :param n_parents: number of parents to select
@@ -149,6 +159,7 @@ def salesman_gen(num_cities, n_population, n_generations, mutation_prob, selecti
     # grading initial population
     costs, total_best_cost = euclidean_sum(x, y, perms)
     best_solution = perms[:, np.argmin(costs)]
+
     best_list=[]
     # main algorithm
     for i in range(n_generations):
@@ -159,7 +170,11 @@ def salesman_gen(num_cities, n_population, n_generations, mutation_prob, selecti
             best_solution = perms[:, np.argmin(costs)]
 
         best_list.append(total_best_cost)
+        print(perms)
+        perms = selection_delete_and_duplicate(costs, perms, n_population)
+        print(perms)
         parents_idx = selection(costs, n_population)
+
         children = crossing(perms, parents_idx)
         children_mutated = mutation(children, mutation_prob)
         perms = children_mutated
@@ -172,10 +187,13 @@ def salesman_gen(num_cities, n_population, n_generations, mutation_prob, selecti
 
     return best_solution, total_best_cost, x_coords, y_coords, best_list
 
-def visualize(best_solution, best_cost, x, y, best):
+def visualize(best_solution, best_cost, x, y, best, sel):
 
-    fig, ax = plt.subplots(1,2, figsize=[20, 15])
-    fig.suptitle("Problem Komiwojażera")
+    fig, ax = plt.subplots(1,2, figsize=[10, 5])
+    if sel == 'rank':
+        fig.suptitle("Problem Komiwojażera (selekcja rankingowa)")
+    elif sel=='roulette':
+        fig.suptitle("Problem Komiwojażera (selekcja ruletką)")
 
     ax[0].set(title="Optymalna ścieżka", xlabel="X", ylabel="Y")
     ax[0].scatter(x, y, color='b')
@@ -199,6 +217,8 @@ def visualize(best_solution, best_cost, x, y, best):
 
 if __name__ == '__main__':
     #np.random.seed(42)
-    best_sol, best_cost, x, y, best = salesman_gen(num_cities=10, n_population=1000, n_generations=100, mutation_prob=0.5, selection_method='roulette')
-    print(best)
-    visualize(best_sol, best_cost, x, y, best)
+    best_sol, best_cost, x, y, best = salesman_gen(num_cities=10, n_population=10, n_generations=100,mutation_prob=0.5, selection_method='rank')
+    #best_sol2, best_cost2, x2, y2, best2 = salesman_gen(num_cities=10, n_population=10, n_generations=10000,mutation_prob=1,selection_method='roulette')
+    visualize(best_sol, best_cost, x, y, best, 'rank')
+    #visualize(best_sol2, best_cost2, x2, y2, best2 ,'roulette')
+
