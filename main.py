@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import random
+from scipy.stats import rankdata
 
 
 def selection_delete_and_duplicate(costs, perms, n_parents):
@@ -32,22 +34,25 @@ def rank_sel(costs, n_parents):
     :param costs: vector of cost function values for the population
     :return: indexes of parents chosen based on the rankings
     """
-    # getting indices of best individuals
-    ranks = np.argsort(costs)
+    # Compute the ranks of all the costs and their sum
+    ranks = rankdata(costs, method='ordinal')
+    rank_sum = sum(ranks)
 
-    # ranking
-    p = 0.4
-    probs = np.zeros(len(ranks))
-    total = 0
-    for i in ranks[:-1]:
-        probs[i] = (1 - total) * p
-        total += probs[i]
-    probs[ranks[-1]] = 1 - total
+    # Compute the probability of selection for each cost and cumulative sum of the probabilities
+    probabilities = ranks / rank_sum
+    cum_probabilities = [sum(probabilities[:i + 1]) for i in range(len(probabilities))]
 
-    # choosing parents - each 2 indices make one couple
-    parents_idx = np.random.choice(np.arange(len(costs)), size=n_parents, replace=True, p=probs)
+    # Generate n_parents random numbers between 0 and 1
+    random_numbers = [random.random() for _ in range(n_parents)]
 
-    return parents_idx
+    # Select the parents
+    parents_indices = []
+    for random_number in random_numbers:
+        for i in range(len(cum_probabilities)):
+            if cum_probabilities[i] >= random_number:
+                parents_indices.append(i)
+                break
+    return parents_indices
 
 
 def roulette_sel(costs, n_parents):
@@ -92,10 +97,11 @@ def mutation(perms, prob):
     return mutated
 
 
-def crossing(perms, parents_idx):
+def crossing(perms, parents_idx, prob):
     """
     Function implementing crossing of genes between individuals
 
+    :param prob: probability of crossing
     :param parents_idx: indexes of parents, every 2 following indexes make parents
     :param perms: array with shape (n_cities, n_populations) of permutations, each column index is another individual,
         later becoming a child
@@ -109,43 +115,49 @@ def crossing(perms, parents_idx):
     n_cities, n_populations = perms.shape
 
     # getting length of crossing and number of couples
-    length_of_cross = int(n_cities / 3)  # a piece of approximately 30% of length of permutation will be changed
+    min_cross = int(n_cities * 0.2)
+    max_cross = int(n_cities * 0.8)
+    length_of_cross = np.random.randint(min_cross, max_cross)  # 20-80% of length of permutation will be changed
     n_parents = int(n_populations / 2)  # number of pairs of parents f.e. 6 pairs = 12 parents = 12 children
 
     # creating empty array for next generation
     children = np.zeros((n_cities, n_populations))
 
-    # crossing
-    for pair_id in range(n_parents):
-        # drawing random places where crossing will take place
-        start = np.random.randint(0, n_cities - length_of_cross)
-        stop = start + length_of_cross
+    # crossing with probability
+    if np.random.rand() < prob:
+        for pair_id in range(n_parents):
+            # drawing random places where crossing will take place
+            start = np.random.randint(0, n_cities - length_of_cross)
+            stop = start + length_of_cross
 
-        # selecting parents
-        p1 = parents[:, pair_id * 2]
-        p2 = parents[:, pair_id * 2 + 1]
+            # selecting parents
+            p1 = parents[:, pair_id * 2]
+            p2 = parents[:, pair_id * 2 + 1]
 
-        # selecting parts which will be changed
-        cities_1 = p1[start:stop]
-        cities_2 = p2[start:stop]
+            # selecting parts which will be changed
+            cities_1 = p1[start:stop]
+            cities_2 = p2[start:stop]
 
-        # getting indexes of cities we want to change
-        index_1 = np.ravel([np.where(p1 == i) for i in cities_2])
-        index_2 = np.ravel([np.where(p2 == i) for i in cities_1])
+            # getting indexes of cities we want to change
+            index_1 = np.ravel([np.where(p1 == i) for i in cities_2])
+            index_2 = np.ravel([np.where(p2 == i) for i in cities_1])
 
-        # deleting those cities
-        p1_new = np.delete(p1, index_1)
-        p2_new = np.delete(p2, index_2)
+            # deleting those cities
+            p1_new = np.delete(p1, index_1)
+            p2_new = np.delete(p2, index_2)
 
-        # inserting new cities
-        p1_final = np.insert(p1_new, start, cities_2)
-        p2_final = np.insert(p2_new, start, cities_1)
+            # inserting new cities
+            p1_final = np.insert(p1_new, start, cities_2)
+            p2_final = np.insert(p2_new, start, cities_1)
 
-        # putting it to final array
-        children[:, pair_id * 2] = p1_final
-        children[:, pair_id * 2 + 1] = p2_final
+            # putting it to final array
+            children[:, pair_id * 2] = p1_final
+            children[:, pair_id * 2 + 1] = p2_final
 
-    return children
+        return children
+    else:
+        # crossing did not occur because of probability
+        return parents
 
 
 def euclidean_sum(x, y, perms):
@@ -175,11 +187,12 @@ def euclidean_sum(x, y, perms):
     return np.sum(dist, axis=1), np.min(np.sum(dist, axis=1))
 
 
-def salesman_gen(num_cities=10, n_population=100, n_generations=100, mutation_prob=0.5,
+def salesman_gen(num_cities=10, n_population=100, n_generations=100, mutation_prob=0.5, cross_prob=0.9,
                  selection_method='roulette'):
     """
     Function solving Traveling Salesman problem using genetic algorithm
 
+    :param cross_prob: probability of crossing
     :param selection_method: Can be 'roulette' or 'rank'
     :param mutation_prob: probability of mutation
     :param num_cities: number of cities we want to travel to
@@ -237,7 +250,7 @@ def salesman_gen(num_cities=10, n_population=100, n_generations=100, mutation_pr
         parents_idx = selection(new_costs, n_population)
 
         # crossing
-        children = crossing(perms, parents_idx)
+        children = crossing(perms, parents_idx, cross_prob)
 
         # mutating
         children_mutated = mutation(children, mutation_prob)
@@ -252,42 +265,76 @@ def salesman_gen(num_cities=10, n_population=100, n_generations=100, mutation_pr
     return best_solution, x, y, best_list
 
 
-def visualize(best_solution, x, y, best, sel):
-    fig, ax = plt.subplots(1, 2, figsize=[10, 5])
-    if sel == 'rank':
-        fig.suptitle("Problem Komiwojażera (selekcja rankingowa)")
-    elif sel == 'roulette':
-        fig.suptitle("Problem Komiwojażera (selekcja ruletką)")
+def visualize(best_solution_ra, x_ra, y_ra, best_ra, best_solution_ro, x_ro, y_ro, best_ro):
+    """
 
-    ax[0].set(title="Optymalna ścieżka", xlabel="X", ylabel="Y")
-    ax[0].scatter(x, y, color='b')
-    for i in range(len(best_solution) - 1):
-        start = best_solution[i]
-        end = best_solution[i + 1]
-        x_vals = [x[start], x[end]]
-        y_vals = [y[start], y[end]]
-        ax[0].plot(x_vals, y_vals, color='r')
-        ax[0].text(x[start], y[start], str(start), fontsize=12)
+    :param best_solution_ra: best route (number of cities in order) - rank selection
+    :param x_ra: x coordinates of the cities - rank selection
+    :param y_ra: y coordinates of the cities - rank selection
+    :param best_ra: list of the bets costs in each population - rank selection
+    :param best_solution_ro: best route (number of cities in order) - roulette selection
+    :param x_ro: x coordinates of the cities - roulette selection
+    :param y_ro: x coordinates of the cities - roulette selection
+    :param best_ro: list of the bets costs in each population - roulette selection
+    """
+    fig, ax = plt.subplots(2, 2, figsize=[15, 15])
+
+    fig.suptitle("Problem Komiwojażera")
+    ax[0][0].set(title="Optymalna ścieżka (selekcja metodą rankingową)", xlabel="X", ylabel="Y")
+    ax[0][0].scatter(x_ra, y_ra, color='b')
+    for i in range(len(best_solution_ra) - 1):
+        start = best_solution_ra[i]
+        end = best_solution_ra[i + 1]
+        x_vals = [x_ra[start], x_ra[end]]
+        y_vals = [y_ra[start], y_ra[end]]
+        ax[0][0].plot(x_vals, y_vals, color='r')
+        ax[0][0].text(x_ra[start], y_ra[start], str(start), fontsize=12)
     # pierwsze z ostatnim
-    x_vals = [x[best_solution[-1]], x[best_solution[0]]]
-    y_vals = [y[best_solution[-1]], y[best_solution[0]]]
-    ax[0].plot(x_vals, y_vals, color='r')
-    ax[0].text(x[best_solution[-1]], y[best_solution[-1]], str(best_solution[-1]))
+    x_vals = [x_ra[best_solution_ra[-1]], x_ra[best_solution_ra[0]]]
+    y_vals = [y_ra[best_solution_ra[-1]], y_ra[best_solution_ra[0]]]
+    ax[0][0].plot(x_vals, y_vals, color='r')
+    ax[0][0].text(x_ra[best_solution_ra[-1]], y_ra[best_solution_ra[-1]], str(best_solution_ra[-1]))
 
-    ax[1].set(title="Funkcja kosztu w kolejnych pokoleniach", xlabel="Numer pokolenia", ylabel="Wartość funkcji kosztu")
-    ax[1].plot(best)
+    ax[0][1].set(title="Funkcja kosztu w kolejnych pokoleniach", xlabel="Numer pokolenia",
+                 ylabel="Wartość funkcji kosztu")
+    ax[0][1].plot(best_ra)
+
+    ax[1][0].set(title="Optymalna ścieżka (selekcja metodą ruletki)", xlabel="X", ylabel="Y")
+    ax[1][0].scatter(x_ro, y_ro, color='b')
+    for i in range(len(best_solution_ro) - 1):
+        start = best_solution_ro[i]
+        end = best_solution_ro[i + 1]
+        x_vals = [x_ro[start], x_ro[end]]
+        y_vals = [y_ro[start], y_ro[end]]
+        ax[1][0].plot(x_vals, y_vals, color='r')
+        ax[1][0].text(x_ro[start], y_ro[start], str(start), fontsize=12)
+    # pierwsze z ostatnim
+    x_vals = [x_ro[best_solution_ro[-1]], x_ro[best_solution_ro[0]]]
+    y_vals = [y_ro[best_solution_ro[-1]], y_ro[best_solution_ro[0]]]
+    ax[1][0].plot(x_vals, y_vals, color='r')
+    ax[1][0].text(x_ro[best_solution_ro[-1]], y_ro[best_solution_ro[-1]], str(best_solution_ro[-1]))
+
+    ax[1][1].set(title="Funkcja kosztu w kolejnych pokoleniach", xlabel="Numer pokolenia",
+                 ylabel="Wartość funkcji kosztu")
+    ax[1][1].plot(best_ro)
 
     plt.show()
 
 
 if __name__ == '__main__':
     # np.random.seed(42)
-    best_sol, x, y, best = salesman_gen(num_cities=10,
-                                        n_population=300,
-                                        n_generations=200,
-                                        mutation_prob=0,
-                                        selection_method='rank')
+    best_sol_ra, x_ra, y_ra, best_ra = salesman_gen(num_cities=20,
+                                                    n_population=1000,
+                                                    n_generations=200,
+                                                    mutation_prob=0,
+                                                    cross_prob=0.95,
+                                                    selection_method='rank')
 
-    visualize(best_sol, x, y, best, 'rank')
+    best_sol_ro, x2_ro, y2_ro, best_ro = salesman_gen(num_cities=20,
+                                                      n_population=1000,
+                                                      n_generations=200,
+                                                      mutation_prob=0,
+                                                      cross_prob=0.95,
+                                                      selection_method='roulette')
 
-    exit(0)
+    visualize(best_sol_ra, x_ra, y_ra, best_ra, best_sol_ro, x2_ro, y2_ro, best_ro)
