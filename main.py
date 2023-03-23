@@ -2,9 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 from scipy.stats import rankdata
+import time
 
 
-def selection_delete_and_duplicate(costs, perms, n_parents):
+def selection_delete_and_duplicate(costs, perms, n_parents, percentage):
     """
     Selects parents from population by deleting the worst individuals and duplicating the best ones.
     Note: this function might be unsafe ;)
@@ -12,6 +13,8 @@ def selection_delete_and_duplicate(costs, perms, n_parents):
     :param costs: vector of cost function values for the population
     :param perms: permutations for each individual
     :param n_parents: number of individuals in each generation
+    :param percentage: percentage of worst individuals to be destroyed
+    :returns: new parents and their new costs
     """
     # Sorting costs (indices)
     idx = np.argsort(costs)
@@ -19,11 +22,19 @@ def selection_delete_and_duplicate(costs, perms, n_parents):
     # sorting population according to the cost function
     parents = perms[:, idx[:n_parents]]
 
-    # duplicating first half
-    good_parents = np.repeat(parents[:, :n_parents // 2], 2, axis=1)
-    new_costs = np.repeat(costs[idx[:n_parents // 2]], 2)
+    # counting number of individuals to be destroyed
+    n_destroy = int(percentage * n_parents)
 
-    return good_parents, new_costs
+    # duplicating
+    best_parents = np.zeros(perms.shape)
+    best_costs = np.zeros(costs.shape)
+    best_parents[:, :(n_parents-n_destroy)] = parents[:, :(n_parents-n_destroy)]
+    best_costs[:(n_parents-n_destroy)] = costs[idx[:n_parents - n_destroy]]
+    rest_parents_idx = np.random.choice(np.arange(n_parents - n_destroy), size=n_destroy, replace=True)
+    best_parents[:, (n_parents-n_destroy):] = best_parents[:, rest_parents_idx]
+    best_costs[(n_parents-n_destroy):] = costs[idx[rest_parents_idx]]
+
+    return best_parents, best_costs
 
 
 def rank_sel(costs, n_parents):
@@ -117,16 +128,17 @@ def crossing(perms, parents_idx, prob):
     # getting length of crossing and number of couples
     min_cross = int(n_cities * 0.2)
     max_cross = int(n_cities * 0.8)
-    length_of_cross = np.random.randint(min_cross, max_cross)  # 20-80% of length of permutation will be changed
     n_parents = int(n_populations / 2)  # number of pairs of parents f.e. 6 pairs = 12 parents = 12 children
 
     # creating empty array for next generation
     children = np.zeros((n_cities, n_populations))
 
     # crossing with probability
-    if np.random.rand() < prob:
-        for pair_id in range(n_parents):
+
+    for pair_id in range(n_parents):
+        if np.random.rand() < prob:
             # drawing random places where crossing will take place
+            length_of_cross = np.random.randint(min_cross, max_cross)  # 20-80% of length of permutation will be changed
             start = np.random.randint(0, n_cities - length_of_cross)
             stop = start + length_of_cross
 
@@ -153,11 +165,10 @@ def crossing(perms, parents_idx, prob):
             # putting it to final array
             children[:, pair_id * 2] = p1_final
             children[:, pair_id * 2 + 1] = p2_final
-
-        return children
-    else:
-        # crossing did not occur because of probability
-        return parents
+        else:
+            children[:, pair_id * 2] = parents[:, pair_id * 2]
+            children[:, pair_id * 2 + 1] = parents[:, pair_id * 2 + 1]
+    return children
 
 
 def euclidean_sum(x, y, perms):
@@ -187,8 +198,8 @@ def euclidean_sum(x, y, perms):
     return np.sum(dist, axis=1), np.min(np.sum(dist, axis=1))
 
 
-def salesman_gen(num_cities=10, n_population=100, n_generations=100, mutation_prob=0.5, cross_prob=0.9,
-                 selection_method='roulette'):
+def salesman_gen(num_cities=10, n_population=100, mutation_prob=0.1, cross_prob=0.9,
+                 n_changes=1000, percentage_bad=0.2, selection_method='roulette'):
     """
     Function solving Traveling Salesman problem using genetic algorithm
 
@@ -197,9 +208,14 @@ def salesman_gen(num_cities=10, n_population=100, n_generations=100, mutation_pr
     :param mutation_prob: probability of mutation
     :param num_cities: number of cities we want to travel to
     :param n_population: number of population for our algorithm
-    :param n_generations: number of generations to test
-    :return:
+    :param percentage_bad: percentage of bad individuals to kill
+    :param n_changes: number of generations without change to finish looking for solution
+    :return: best route, x and y coordinates, list of best results
     """
+
+    # starting measuring time
+    start = time.time()
+
     # drawing x and y coordinates of cities
     x = 300 * np.random.random(num_cities)
     y = 300 * np.random.random(num_cities)
@@ -224,27 +240,34 @@ def salesman_gen(num_cities=10, n_population=100, n_generations=100, mutation_pr
     best_solution = perms[:, np.argmin(costs)]
 
     # list for visualization
-    best_list = np.zeros((n_generations, 1))
+    best_list = []
+
+    # variables for controlling number of generations
+    no_change = 0
+    i = 0
 
     # main algorithm
-    for i in range(n_generations):
+    while no_change < n_changes:
 
         # grading current generation
         costs, best = euclidean_sum(x, y, perms)
 
         # printing current best result for debugging
-        print("Generacja:", i, "total:", total_best_cost, "populacja:", best)
+        #print("Generacja:", i, "total:", total_best_cost, "populacja:", best)
 
         # if we got better permutation - save it
         if best < total_best_cost:
             total_best_cost = best
             best_solution = perms[:, np.argmin(costs)]
+            no_change = 0
+        else:
+            no_change += 1
 
         # appending best cost to list for visualization
-        best_list[i] = total_best_cost
+        best_list.append(total_best_cost)
 
         # duplicating good permutations and deleting bad ones
-        perms, new_costs = selection_delete_and_duplicate(costs, perms, n_population)
+        perms, new_costs = selection_delete_and_duplicate(costs, perms, n_population, percentage_bad)
 
         # selection
         parents_idx = selection(new_costs, n_population)
@@ -258,9 +281,14 @@ def salesman_gen(num_cities=10, n_population=100, n_generations=100, mutation_pr
         # saving new generation
         perms = children_mutated
 
+        # incrementing number of generations
+        i += 1
+
     # printing final best solution
+    end = time.time()
     best_solution = best_solution.astype(int)
-    print("Najlepsze rozwiązanie:", best_solution, "o koszcie:", total_best_cost)
+    print("Najlepsze rozwiązanie:", best_solution, "o koszcie:", total_best_cost,
+          "\nZnalezione w", i, "iteracjach, w czasie: ", end - start, "sekund.")
 
     return best_solution, x, y, best_list
 
@@ -324,17 +352,13 @@ def visualize(best_solution_ra, x_ra, y_ra, best_ra, best_solution_ro, x_ro, y_r
 if __name__ == '__main__':
     # np.random.seed(42)
     best_sol_ra, x_ra, y_ra, best_ra = salesman_gen(num_cities=20,
-                                                    n_population=1000,
-                                                    n_generations=200,
-                                                    mutation_prob=0,
-                                                    cross_prob=0.95,
+                                                    n_population=200,
+                                                    n_changes=500,
                                                     selection_method='rank')
 
     best_sol_ro, x2_ro, y2_ro, best_ro = salesman_gen(num_cities=20,
-                                                      n_population=1000,
-                                                      n_generations=200,
-                                                      mutation_prob=0,
-                                                      cross_prob=0.95,
+                                                      n_population=200,
+                                                      n_changes=500,
                                                       selection_method='roulette')
 
     visualize(best_sol_ra, x_ra, y_ra, best_ra, best_sol_ro, x2_ro, y2_ro, best_ro)
