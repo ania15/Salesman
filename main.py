@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import random
-from scipy.stats import rankdata
+import pandas as pd
 import time
 
 
@@ -45,25 +44,14 @@ def rank_sel(costs, n_parents):
     :param costs: vector of cost function values for the population
     :return: indexes of parents chosen based on the rankings
     """
-    # Compute the ranks of all the costs and their sum
-    ranks = rankdata(costs, method='ordinal')
-    rank_sum = sum(ranks)
+    # create a DataFrame from the input list
+    df = pd.DataFrame(costs, columns=['cost'])
 
-    # Compute the probability of selection for each cost and cumulative sum of the probabilities
-    probabilities = ranks / rank_sum
-    cum_probabilities = [sum(probabilities[:i + 1]) for i in range(len(probabilities))]
+    # rank the DataFrame in descending order
+    df['rank'] = df['cost'].rank(ascending=False)
 
-    # Generate n_parents random numbers between 0 and 1
-    random_numbers = [random.random() for _ in range(n_parents)]
-
-    # Select the parents
-    parents_indices = []
-    for random_number in random_numbers:
-        for i in range(len(cum_probabilities)):
-            if cum_probabilities[i] >= random_number:
-                parents_indices.append(i)
-                break
-    return parents_indices
+    # return the indices of the top n_parents parents
+    return df.sort_values('rank').iloc[:n_parents].index.tolist()
 
 
 def roulette_sel(costs, n_parents):
@@ -253,7 +241,7 @@ def salesman_gen(num_cities=10, n_population=100, mutation_prob=0.1, cross_prob=
         costs, best = euclidean_sum(x, y, perms)
 
         # printing current best result for debugging
-        #print("Generacja:", i, "total:", total_best_cost, "populacja:", best)
+        # print("Generacja:", i, "total:", total_best_cost, "populacja:", best)
 
         # if we got better permutation - save it
         if best < total_best_cost:
@@ -295,6 +283,7 @@ def salesman_gen(num_cities=10, n_population=100, mutation_prob=0.1, cross_prob=
 
 def visualize(best_solution_ra, x_ra, y_ra, best_ra, best_solution_ro, x_ro, y_ro, best_ro):
     """
+    Function visualizing results
 
     :param best_solution_ra: best route (number of cities in order) - rank selection
     :param x_ra: x coordinates of the cities - rank selection
@@ -305,9 +294,11 @@ def visualize(best_solution_ra, x_ra, y_ra, best_ra, best_solution_ro, x_ro, y_r
     :param y_ro: x coordinates of the cities - roulette selection
     :param best_ro: list of the bets costs in each population - roulette selection
     """
-    fig, ax = plt.subplots(2, 2, figsize=[15, 15])
+    fig, ax = plt.subplots(2, 2, figsize=[10, 10])
 
-    fig.suptitle("Problem Komiwojażera")
+    fig.suptitle("Problem Komiwojażera", fontsize=20)
+
+    # optimal route for the rank selection method
     ax[0][0].set(title="Optymalna ścieżka (selekcja metodą rankingową)", xlabel="X", ylabel="Y")
     ax[0][0].scatter(x_ra, y_ra, color='b')
     for i in range(len(best_solution_ra) - 1):
@@ -317,16 +308,18 @@ def visualize(best_solution_ra, x_ra, y_ra, best_ra, best_solution_ro, x_ro, y_r
         y_vals = [y_ra[start], y_ra[end]]
         ax[0][0].plot(x_vals, y_vals, color='r')
         ax[0][0].text(x_ra[start], y_ra[start], str(start), fontsize=12)
-    # pierwsze z ostatnim
+
     x_vals = [x_ra[best_solution_ra[-1]], x_ra[best_solution_ra[0]]]
     y_vals = [y_ra[best_solution_ra[-1]], y_ra[best_solution_ra[0]]]
     ax[0][0].plot(x_vals, y_vals, color='r')
     ax[0][0].text(x_ra[best_solution_ra[-1]], y_ra[best_solution_ra[-1]], str(best_solution_ra[-1]))
 
+    # cost function in each generation for rank selection method
     ax[0][1].set(title="Funkcja kosztu w kolejnych pokoleniach", xlabel="Numer pokolenia",
                  ylabel="Wartość funkcji kosztu")
     ax[0][1].plot(best_ra)
 
+    # optimal route for the roulette selection method
     ax[1][0].set(title="Optymalna ścieżka (selekcja metodą ruletki)", xlabel="X", ylabel="Y")
     ax[1][0].scatter(x_ro, y_ro, color='b')
     for i in range(len(best_solution_ro) - 1):
@@ -336,12 +329,13 @@ def visualize(best_solution_ra, x_ra, y_ra, best_ra, best_solution_ro, x_ro, y_r
         y_vals = [y_ro[start], y_ro[end]]
         ax[1][0].plot(x_vals, y_vals, color='r')
         ax[1][0].text(x_ro[start], y_ro[start], str(start), fontsize=12)
-    # pierwsze z ostatnim
+
     x_vals = [x_ro[best_solution_ro[-1]], x_ro[best_solution_ro[0]]]
     y_vals = [y_ro[best_solution_ro[-1]], y_ro[best_solution_ro[0]]]
     ax[1][0].plot(x_vals, y_vals, color='r')
     ax[1][0].text(x_ro[best_solution_ro[-1]], y_ro[best_solution_ro[-1]], str(best_solution_ro[-1]))
 
+    # cost function in each generation for roulette selection method
     ax[1][1].set(title="Funkcja kosztu w kolejnych pokoleniach", xlabel="Numer pokolenia",
                  ylabel="Wartość funkcji kosztu")
     ax[1][1].plot(best_ro)
@@ -351,13 +345,13 @@ def visualize(best_solution_ra, x_ra, y_ra, best_ra, best_solution_ro, x_ro, y_r
 
 if __name__ == '__main__':
     # np.random.seed(42)
-    best_sol_ra, x_ra, y_ra, best_ra = salesman_gen(num_cities=20,
-                                                    n_population=200,
+    best_sol_ra, x_ra, y_ra, best_ra = salesman_gen(num_cities=30,
+                                                    n_population=1000,
                                                     n_changes=500,
                                                     selection_method='rank')
 
-    best_sol_ro, x2_ro, y2_ro, best_ro = salesman_gen(num_cities=20,
-                                                      n_population=200,
+    best_sol_ro, x2_ro, y2_ro, best_ro = salesman_gen(num_cities=30,
+                                                      n_population=1000,
                                                       n_changes=500,
                                                       selection_method='roulette')
 
